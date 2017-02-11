@@ -1,2 +1,2 @@
 # go-omaha-protocol
-Omaha protocol written in Go
+My own implementation of Google's Omaha protocol in Go for testing purposes.
