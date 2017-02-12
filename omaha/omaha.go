@@ -3,7 +3,11 @@ package omaha
 import (
     "encoding/xml"
     "fmt"
+    "io/ioutil"
+    "os"
 )
+
+const StableChannel = "https://stable.release.core-os.net/amd64-usr/"
 
 // Data : Each <data> tag in the request represents either a request for additional textual information from the server, or provides additional textual information to the server.
 type Data struct {
@@ -39,6 +43,7 @@ type Ping struct {
     AD              uint        `xml:"ad,attr,omitempty"`
     RD              uint        `xml:"rd,attr,omitempty"`
     PingFreshness   int64       `xml:"ping_freshness,attr,omitempty"`
+    Status          string      `xml:"status,attr"`
 }
 
 // UpdateCheck : 
@@ -49,7 +54,7 @@ type UpdateCheck struct {
     TargetVersionPrefix string      `xml:"targetversionprefix,attr,omitempty"`
 	//Urls                *Urls     `xml:"urls"`
 	//Manifest            *Manifest `xml:"manifest"`	
-	//Status              string    `xml:"status,attr,omitempty"`
+	Status              string      `xml:"status,attr"`
 }
 
 // Event : Throughout and at the end of an update flow, the client MAY send event reports by sending one or more requests containing an <event>.
@@ -98,11 +103,12 @@ type App struct {
     InstallDate     string      `xml:"installdate,attr,omitempty"`
     InstallSource   string      `xml:"installsource,attr,omitempty"`
     IsMachine       string      `xml:"ismachine,attr,omitempty"`
-    TAG             string      `xml:"tag,attr,omitempty"`
+    Track           string      `xml:"track,attr,omitempty"` //TAG equivalent
     Fingerprint     string      `xml:"fingerprint,attr,omitempty"`
     COHORT          string      `xml:"cohort,attr,omitempty"`
     COHORTHint      string      `xml:"cohorthint,attr,omitempty"`
     COHORTName      string      `xml:"cohortname,attr,omitempty"`
+    Status          string      `xml:"status,attr,omitempty"`
 }
 
 // Os : 
@@ -147,6 +153,21 @@ type Request struct {
     Version         string      `xml:"version,attr,omitempty"`
 }
 
+type DayStart struct {   
+    ElapsedSeconds  int         `xml:"elapsed_seconds,attr"`
+    ElapsedDays     int         `xml:"elapsed_days,attr"`
+}
+
+// Response :
+type Response struct {
+    XMLName         xml.Name    `xml:"response"`
+    Protocol        string      `xml:"protocol,attr"`
+    Server          string      `xml:"server,attr"`
+    Apps            []*App      `xml:"app,omitempty"`
+    DayStart        DayStart    `xml:"daystart,omitempty"`       
+}
+
+// EventTypes : 
 var EventTypes = map[int]string{
 	0:   "unknown",
 	1:   "download complete",
@@ -174,6 +195,7 @@ var EventTypes = map[int]string{
 	103: "setup update failure",
 }
 
+// EventResults :
 var EventResults = map[int]string{
 	0:  "error",
 	1:  "success",
@@ -188,6 +210,7 @@ var EventResults = map[int]string{
 	10: "handoff error",
 }
 
+// StatesCancelled : 
 var StatesCancelled = map[int]string{
     0:  "unknown or not-cancelled",
     1:  "initializing",
@@ -209,6 +232,54 @@ var StatesCancelled = map[int]string{
     17: "error",
 }
 
+func NewApp(appid string) *App {
+    return &App{AppID: appid}
+}
+
+func (r *Response) AddApp(appid string) {
+    a := NewApp(appid)
+    r.Apps = append(r.Apps, a)
+}
+
+// NewNoUpdate :
+func NewNoUpdate(app *App) *Response {
+    r := new(Response)
+    
+    return r
+} 
+
+func CheckForUpdate(r *Request) *Response {
+    return NewNoUpdate(r.Apps[0])
+}
+
 func main()  {
     //testing omaha requests parsing
+    file, err := os.Open("data/no-update/request.xml")
+    if err != nil {
+        return
+    }
+    request, err := ioutil.ReadAll(file)
+    if err != nil {
+        return
+    }
+    r := Request{}
+    if err = xml.Unmarshal(request, &r); err != nil {
+        return
+    }
+    switch {
+    case r.Protocol == "":
+        fmt.Println("Protocol should be provided.")
+        return
+    case r.Os.Version != "Ladybug":
+        fmt.Println("Ladybug is the only supported Os.")
+        return    
+    }
+
+    response := CheckForUpdate(&r);
+    enc := xml.NewEncoder(os.Stdout)
+    enc.Indent("  ", "    ")
+    if err := enc.Encode(response); err != nil {
+        fmt.Printf("error: %v\n", err)
+    }
+    
 }
