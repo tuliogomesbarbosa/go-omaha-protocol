@@ -1,10 +1,11 @@
-package omaha
+package main
 
 import (
     "encoding/xml"
     "fmt"
     "io/ioutil"
     "os"
+    "path/filepath"
 )
 
 const StableChannel = "https://stable.release.core-os.net/amd64-usr/"
@@ -232,19 +233,27 @@ var StatesCancelled = map[int]string{
     17: "error",
 }
 
-func NewApp(appid string) *App {
-    return &App{AppID: appid}
+func NewUpdateCheck(status string) UpdateCheck {
+    return UpdateCheck{Status: status}
 }
 
-func (r *Response) AddApp(appid string) {
-    a := NewApp(appid)
+func NewApp(appid string, appstatus string, updatestatus string) *App {
+    return &App{
+        AppID: appid,
+        Status: appstatus,
+        UpdateCheck: NewUpdateCheck(updatestatus), 
+    }
+}
+
+func (r *Response) AddApp(appid string, appstatus string, updatestatus string) {
+    a := NewApp(appid, appstatus, updatestatus)
     r.Apps = append(r.Apps, a)
 }
 
 // NewNoUpdate :
 func NewNoUpdate(app *App) *Response {
     r := new(Response)
-    
+    r.AddApp(app.AppID, "ok", "noupdate")
     return r
 } 
 
@@ -253,13 +262,16 @@ func CheckForUpdate(r *Request) *Response {
 }
 
 func main()  {
+    absPath, _ := filepath.Abs("../data/no-update/request.xml")
     //testing omaha requests parsing
-    file, err := os.Open("data/no-update/request.xml")
+    file, err := os.Open(absPath)
     if err != nil {
+        fmt.Printf("Could not open file: %v\n", err)
         return
     }
     request, err := ioutil.ReadAll(file)
     if err != nil {
+        fmt.Printf("Could not read file: %v\n", err)
         return
     }
     r := Request{}
@@ -270,7 +282,7 @@ func main()  {
     case r.Protocol == "":
         fmt.Println("Protocol should be provided.")
         return
-    case r.Os.Version != "Ladybug":
+    case r.Os.Platform != "Ladybug":
         fmt.Println("Ladybug is the only supported Os.")
         return    
     }
@@ -281,5 +293,4 @@ func main()  {
     if err := enc.Encode(response); err != nil {
         fmt.Printf("error: %v\n", err)
     }
-    
 }
